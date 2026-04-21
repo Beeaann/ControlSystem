@@ -11,8 +11,8 @@ GPIO::GPIO(int pin) : pin_(pin), lgpio_handle_(-1), running_(false) {
     
     if (lgpio_handle_ >= 0) {
         // Claim the pin explicitly as an INPUT with an internal PULL-UP resistor!
-        // This ensures the button defaults to HIGH (1), and drops to LOW (0) when you press it.
-        lgGpioClaimInput(lgpio_handle_, 0, pin_);
+        // This stops the pin from "floating" and acting like an antenna grabbing random voltages.
+        lgGpioClaimInput(lgpio_handle_, LG_SET_PULL_UP, pin_);
     }
 }
 

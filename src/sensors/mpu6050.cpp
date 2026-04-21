@@ -27,10 +27,12 @@ void MPU6050::readRawData() {
         int16_t accelY = (data[2] << 8) | data[3];
         int16_t accelZ = (data[4] << 8) | data[5];
         
-        // Print it out to prove the math is mapping to reality!
-        std::cout << "[MPU6050] Raw Physics Data -> X=" << accelX 
-                  << "\tY=" << accelY 
-                  << "\tZ=" << accelZ << "\n";
+        // Simple Gravity Mapping: 1g is roughly 16384 raw. Map X-axis acceleration directly to an angle (-90 to +90)
+        pitch_ = (accelX / 16384.0f) * 90.0f;
+        
+        // Clamp it safely for the servo limits
+        if (pitch_ > 90.0f) pitch_ = 90.0f;
+        if (pitch_ < -90.0f) pitch_ = -90.0f;
     }
 }
 

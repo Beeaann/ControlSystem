@@ -44,8 +44,6 @@ int main() {
     mpu.initialize();
 
     std::cout << "Entering Deterministic Core Loop..." << std::endl;
-    int tick_counter = 0;
-    float current_angle = -90.0f;
 
     // Outer RT-loop
     while (fsm.getCurrentState() != fsm::SystemState::SHUTDOWN) {
@@ -58,19 +56,15 @@ int main() {
             fsm.transitionTo(fsm::SystemState::ACTIVE_CONTROL);
         }
 
-        // 2. Mock a sweeping motion while we are in Active Control
+        // 2. Map Sensor logic directly to physical actuators
         if (fsm.getCurrentState() == fsm::SystemState::ACTIVE_CONTROL) {
-            tick_counter++;
             
-            // Poll I2C sensor aggressively 
+            // Poll I2C sensor rapidly to get fresh physics data 
             mpu.readRawData();
 
-            // Every 100 ticks (1 second at 10ms target cycle), sweep the servo
-            if (tick_counter >= 100) {
-                tick_counter = 0;
-                current_angle = (current_angle == -90.0f) ? 90.0f : -90.0f;
-                servo.setAngle(current_angle);
-            }
+            // Feed the live Pitch angle directly into the PWM driver!
+            // When you physically tilt the board, the servo will mirror the tilt instantly.
+            servo.setAngle(mpu.getPitch());
         }
 
         // Check if we need to sleep for jitter removal
