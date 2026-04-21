@@ -5,6 +5,7 @@
 #include "core/scheduling.hpp"
 #include "core/fault_handler.hpp"
 #include "fsm/state_machine.hpp"
+#include "actuators/pwm_controller.hpp"
 // #include "sensors/mpu6050.hpp"
 
 // Example Sub-10ms Control Loop Target
@@ -20,24 +21,37 @@ int main() {
 
     core::FaultHandler fault_handler;
     fsm::StateMachine fsm;
+    actuators::PWMController servo(18); // Initialize our servo on GPIO 18
     
     // Initialize state
     fsm.transitionTo(fsm::SystemState::INIT);
+    servo.enable();
 
     std::cout << "Entering Deterministic Core Loop..." << std::endl;
+    int tick_counter = 0;
+    float current_angle = -90.0f;
 
     // Outer RT-loop
     while (fsm.getCurrentState() != fsm::SystemState::SHUTDOWN) {
         auto step_start = std::chrono::steady_clock::now();
 
-        // -----------------------
-        // Core Routine execution:
-        // 1. Gather Interrupt/I2C Sensor Data
-        // 2. Perform FSM Tick Logic + Controller evaluation
-        // 3. Dispatch new actuator signals via PWM
-        // 4. Capture Vision/Camera logs if triggered
-        // -----------------------
         fsm.updateTick();
+
+        // 1. Force transition out of IDLE so the system actually "does something"
+        if (fsm.getCurrentState() == fsm::SystemState::IDLE) {
+            fsm.transitionTo(fsm::SystemState::ACTIVE_CONTROL);
+        }
+
+        // 2. Mock a sweeping motion while we are in Active Control
+        if (fsm.getCurrentState() == fsm::SystemState::ACTIVE_CONTROL) {
+            tick_counter++;
+            // Every 100 ticks (1 second at 10ms target cycle), sweep the servo
+            if (tick_counter >= 100) {
+                tick_counter = 0;
+                current_angle = (current_angle == -90.0f) ? 90.0f : -90.0f;
+                servo.setAngle(current_angle);
+            }
+        }
 
         // Check if we need to sleep for jitter removal
         auto next_tick_time = step_start + TARGET_CYCLE_TIME;
