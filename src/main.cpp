@@ -11,33 +11,31 @@
 #include "drivers/gpio_interrupts.hpp"
 #include "camera/camera_logger.hpp"
 
-// Example Sub-10ms Control Loop Target
+// Target loop timing constraint
 constexpr auto TARGET_CYCLE_TIME = std::chrono::milliseconds(10);
 
 int main() {
     std::cout << "Booting Vision-Enhanced Autonomous Control System..." << std::endl;
 
-    // 1. Setup Scheduling Priorities (Requires root/matching capability sets)
     if (!core::Scheduler::setThreadRealtimePriority(95)) {
          std::cerr << "Warning: Could not set SCHED_FIFO! Running with standard scheduling..." << std::endl;
     }
 
     core::FaultHandler fault_handler;
     fsm::StateMachine fsm;
-    actuators::PWMController servo(18); // Initialize our servo on GPIO 18
-    drivers::I2CBus i2c_bus(1);         // Usually Pi's 40-pin header uses I2C bus 1
+    actuators::PWMController servo(18); // Servo on GPIO 18
+    drivers::I2CBus i2c_bus(1);         // I2C bus 1
     sensors::MPU6050 mpu(i2c_bus, 0x68);
-    drivers::GPIO emergency_button(17); // Our limit switch on GPIO 17
+    drivers::GPIO emergency_button(17); // Button on GPIO 17
     camera::CameraLogger cam;
     
-    // C++11 Lambda: When the button is pushed, safely alert the Fault Handler and instantly kill the system logic
+    // Interrupt handler: logs fault, snaps photo, and shuts down safely
     emergency_button.attachInterrupt([&fsm, &fault_handler, &cam]() {
         fault_handler.registerFault(core::InitialFaultLevel::FATAL, "Physical Emergency Button Triggered!");
         cam.captureEvent("Emergency_Override");
         fsm.transitionTo(fsm::SystemState::SHUTDOWN);
     });
     
-    // Initialize state
     fsm.transitionTo(fsm::SystemState::INIT);
     servo.enable();
     i2c_bus.initialize();
@@ -45,29 +43,24 @@ int main() {
 
     std::cout << "Entering Deterministic Core Loop..." << std::endl;
 
-    // Outer RT-loop
+    // Main RT loop
     while (fsm.getCurrentState() != fsm::SystemState::SHUTDOWN) {
         auto step_start = std::chrono::steady_clock::now();
 
         fsm.updateTick();
 
-        // 1. Force transition out of IDLE so the system actually "does something"
+        // Skip idle directly into active control
         if (fsm.getCurrentState() == fsm::SystemState::IDLE) {
             fsm.transitionTo(fsm::SystemState::ACTIVE_CONTROL);
         }
 
-        // 2. Map Sensor logic directly to physical actuators
+        // Active control logic mapping sensors to actuators
         if (fsm.getCurrentState() == fsm::SystemState::ACTIVE_CONTROL) {
-            
-            // Poll I2C sensor rapidly to get fresh physics data 
             mpu.readRawData();
-
-            // Feed the live Pitch angle directly into the PWM driver!
-            // When you physically tilt the board, the servo will mirror the tilt instantly.
             servo.setAngle(mpu.getPitch());
         }
 
-        // Check if we need to sleep for jitter removal
+        // Suspend thread to prevent loop jitter
         auto next_tick_time = step_start + TARGET_CYCLE_TIME;
         core::Scheduler::sleepUntil(next_tick_time);
     }

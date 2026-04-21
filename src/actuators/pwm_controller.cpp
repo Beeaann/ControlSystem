@@ -1,11 +1,11 @@
 #include "actuators/pwm_controller.hpp"
 #include <iostream>
-#include <lgpio.h> // The official Raspberry Pi 5 GPIO library
+#include <lgpio.h> // Official Raspberry Pi 5 GPIO library
 
 namespace actuators {
 
 PWMController::PWMController(int gpio_pin) : hardware_pin_(gpio_pin), is_enabled_(false), lgpio_handle_(-1) {
-    // Open the default RP1 GPIO chip on the Pi 5 (gpiochip4 usually houses the 40-pin header)
+    // Open the RP1 GPIO chip
     lgpio_handle_ = lgGpiochipOpen(4); 
     if (lgpio_handle_ < 0) {
         std::cerr << "[PWM] Error: Could not open lgpio chip for Pi 5! Trying gpiochip0...\n";
@@ -22,7 +22,7 @@ PWMController::~PWMController() {
 void PWMController::enable() {
     is_enabled_ = true;
     if (lgpio_handle_ >= 0) {
-        // Crucial Pi 5 Step: Explicitly claim the pin as an active OUTPUT before generating PWM
+        // Claim the pin explicitly as an output
         lgGpioClaimOutput(lgpio_handle_, 0, hardware_pin_, 0);
     }
     std::cout << "[PWM] Pin " << hardware_pin_ << " enabled via Pi 5 lgpio hardware driver\n";
@@ -31,7 +31,7 @@ void PWMController::enable() {
 void PWMController::disable() {
     is_enabled_ = false;
     if (lgpio_handle_ >= 0) {
-        lgTxPwm(lgpio_handle_, hardware_pin_, 50, 0, 0, 0); // 0% duty cycle
+        lgTxPwm(lgpio_handle_, hardware_pin_, 50, 0, 0, 0); // Disable pulses
     }
 }
 
@@ -44,17 +44,15 @@ void PWMController::setAngle(float degrees) {
     if (!is_enabled_) return;
     if (lgpio_handle_ < 0) return;
 
-    // Standard Servos require a 50Hz frequency. 
-    // They detect angle based on Duty Cycle (usually 5% is -90 deg, and 10% is +90 deg).
+    // Convert degrees to servo PWM duty cycle percentage 
     float mapped_duty = 5.0f + ((degrees + 90.0f) / 180.0f) * 5.0f; 
     
-    // CRITICAL FIX: Do not constantly re-write the PWM command 100 times a second!
-    // Continually calling lgTxPwm every 10ms overrides the native 20ms pulse train mid-wave, leaving the motor totally dead.
+    // Prevent overlapping updates from resetting the pulse train
     static float last_duty = -1.0f;
     float diff = mapped_duty - last_duty;
-    if (diff < 0) diff = -diff; // absolute value without math.h
+    if (diff < 0) diff = -diff; 
 
-    // Only update hardware and print log if the tilt actually changed physically
+    // Update if the requested angle shifted
     if (diff > 0.05f) {
         std::cout << "[PWM] Tilt Tracking -> Angle: " << (int)degrees << " deg\n";
         lgTxPwm(lgpio_handle_, hardware_pin_, 50, mapped_duty, 0, 0); 

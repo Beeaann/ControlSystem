@@ -31,7 +31,7 @@ bool I2CBus::writeBytes(uint8_t deviceAddress, uint8_t registerAddress, const st
     if (file_descriptor_ < 0) return false;
     if (ioctl(file_descriptor_, I2C_SLAVE, deviceAddress) < 0) return false;
 
-    // The first byte written is the Target Register Address
+    // Buffer target register address and the data package
     std::vector<uint8_t> buffer;
     buffer.push_back(registerAddress);
     buffer.insert(buffer.end(), data.begin(), data.end());
@@ -46,13 +46,10 @@ std::vector<uint8_t> I2CBus::readBytes(uint8_t deviceAddress, uint8_t registerAd
     std::vector<uint8_t> buffer(length, 0);
     if (file_descriptor_ < 0) return buffer;
     
-    // Assert target chip
     if (ioctl(file_descriptor_, I2C_SLAVE, deviceAddress) < 0) return buffer;
     
-    // Command the register we want to read from
     if (write(file_descriptor_, &registerAddress, 1) != 1) return buffer;
     
-    // Pull the requested number of bytes
     if (read(file_descriptor_, buffer.data(), length) != (ssize_t)length) {
         std::cerr << "[I2C] Read failed!\n";
     }
