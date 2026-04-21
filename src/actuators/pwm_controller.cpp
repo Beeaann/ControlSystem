@@ -38,16 +38,24 @@ void PWMController::setDutyCycle(float percent) {
 
 void PWMController::setAngle(float degrees) {
     if (!is_enabled_) return;
-    std::cout << "[PWM] Pin " << hardware_pin_ << " -> Actual Hardware Sweep: " << degrees << " deg\n";
-    
     if (lgpio_handle_ < 0) return;
 
     // Standard Servos require a 50Hz frequency. 
     // They detect angle based on Duty Cycle (usually 5% is -90 deg, and 10% is +90 deg).
     float mapped_duty = 5.0f + ((degrees + 90.0f) / 180.0f) * 5.0f; 
     
-    // Command: lgTxPwm(handle, pin, frequency, duty_percent, pulse_cycles, pulse_offset)
-    lgTxPwm(lgpio_handle_, hardware_pin_, 50, mapped_duty, 0, 0); 
+    // CRITICAL FIX: Do not constantly re-write the PWM command 100 times a second!
+    // Continually calling lgTxPwm every 10ms overrides the native 20ms pulse train mid-wave, leaving the motor totally dead.
+    static float last_duty = -1.0f;
+    float diff = mapped_duty - last_duty;
+    if (diff < 0) diff = -diff; // absolute value without math.h
+
+    // Only update hardware and print log if the tilt actually changed physically
+    if (diff > 0.05f) {
+        std::cout << "[PWM] Tilt Tracking -> Angle: " << (int)degrees << " deg\n";
+        lgTxPwm(lgpio_handle_, hardware_pin_, 50, mapped_duty, 0, 0); 
+        last_duty = mapped_duty;
+    }
 }
 
 } // namespace actuators
