@@ -9,6 +9,7 @@ namespace actuators {
 class PWMController {
 public:
     PWMController(int gpio_pin);
+    ~PWMController();
 
     /**
      * @brief Enable/Disable the signal safely. 
@@ -29,6 +30,7 @@ public:
 private:
     int hardware_pin_;
     bool is_enabled_;
+    int lgpio_handle_;
 };
 
 } // namespace actuators

@@ -19,7 +19,7 @@ file(GLOB_RECURSE SRC_FILES "src/*.cpp")
 
 # Define our main executable
 add_executable(AutonomousControlSystem ${SRC_FILES})
-target_link_libraries(AutonomousControlSystem PRIVATE Threads::Threads)
+target_link_libraries(AutonomousControlSystem PRIVATE Threads::Threads lgpio)
 # Link real-time libraries (POSIX) if necessary: target_link_libraries(AutonomousControlSystem PRIVATE rt)
 
 # Tests executable
