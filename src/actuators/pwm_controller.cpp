@@ -21,6 +21,10 @@ PWMController::~PWMController() {
 
 void PWMController::enable() {
     is_enabled_ = true;
+    if (lgpio_handle_ >= 0) {
+        // Crucial Pi 5 Step: Explicitly claim the pin as an active OUTPUT before generating PWM
+        lgGpioClaimOutput(lgpio_handle_, 0, hardware_pin_, 0);
+    }
     std::cout << "[PWM] Pin " << hardware_pin_ << " enabled via Pi 5 lgpio hardware driver\n";
 }
 
